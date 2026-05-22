@@ -225,7 +225,7 @@ function TaskCard({ task, token, onChange }) {
       <button className="icon" onClick={toggle} title="Concluir"><CheckCircle2 size={19} /></button>
       <div onDoubleClick={edit} title="Clique duas vezes para editar">
         <h3 className={task.status === 'completed' ? 'done' : ''}>{task.title}</h3>
-        <p>{categoryLabels[task.category]} | {priorityLabels[task.priority]} | {task.due_date || 'sem prazo'} | recorrencia: {task.recurrence}</p>
+        <p>{categoryLabels[task.category]} | {priorityLabels[task.priority]} | {dateStatus(task.due_date)} | recorrencia: {task.recurrence}</p>
       </div>
       <button className="icon danger" onClick={del} title="Excluir"><Trash2 size={18} /></button>
     </article>
@@ -250,7 +250,7 @@ function Finances({ token, owner }) {
         </ResponsiveContainer>
       </div>
       <ListPanel title="Lancamentos" rows={rows.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${money(row.amount)} (${row.type})`} />
-      <ListPanel title="Metas financeiras" rows={goals.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${money(row.current_amount)} de ${money(row.target_amount)}`} />
+      <ListPanel title="Metas financeiras" rows={goals.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${money(row.current_amount)} de ${money(row.target_amount)} - ${dateStatus(row.deadline)}`} />
     </section>
   );
 }
@@ -286,7 +286,7 @@ function Events({ token, owner }) {
   return (
     <section className="grid">
       <Form title="Novo compromisso" owner={owner} form={form} setForm={setForm} onSubmit={submit} fields={['title', 'description', 'event_date', 'visibility']} />
-      <ListPanel title="Calendario simples" rows={rows.filter((row) => row.owner_type === owner)} render={(row) => `${row.event_date.slice(0, 10)} - ${row.title}`} />
+      <ListPanel title="Calendario simples" rows={rows.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${dateStatus(row.event_date.slice(0, 10))}`} />
     </section>
   );
 }
@@ -356,7 +356,7 @@ function Workouts({ token, owner }) {
         <div className="workoutDays">
           {Object.entries(grouped).map(([date, items]) => (
             <section className="workoutDay" key={date}>
-              <h3>{weekday(date)} - {formatDate(date)}</h3>
+              <h3>{weekday(date)} - {formatDate(date)} - {dateStatus(date)}</h3>
               <div className="workoutRows">
                 {items.map((item) => (
                   <article className="workoutRow" key={item.id}>
@@ -527,7 +527,7 @@ function Diet({ token, owner }) {
         <div className="workoutDays">
           {Object.entries(grouped).map(([date, items]) => (
             <section className="workoutDay" key={date}>
-              <h3>{weekday(date)} - {formatDate(date)}</h3>
+              <h3>{weekday(date)} - {formatDate(date)} - {dateStatus(date)}</h3>
               <div className="dietRows">
                 {items.map((item) => (
                   <article className="dietRow" key={item.id}>
@@ -556,7 +556,7 @@ function Goals({ token, owner }) {
     <section className="grid">
       <SimpleCreate title="Meta pessoal/casal" endpoint="/goals" token={token} owner={owner} fields={{ title: '', status: 'active', deadline: '', visibility: owner === 'shared' ? 'shared' : 'private' }} onCreated={(row) => setGoals([row, ...goals])} />
       <SimpleCreate title="Desejo de consumo" endpoint="/wishlists" token={token} owner={owner} fields={{ title: '', estimated_value: 0, priority: 'medium', status: 'wanted', visibility: owner === 'shared' ? 'shared' : 'private' }} onCreated={(row) => setWishes([row, ...wishes])} />
-      <ListPanel title="Metas" rows={goals.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${row.status} - ${row.deadline || 'sem prazo'}`} />
+      <ListPanel title="Metas" rows={goals.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${row.status} - ${dateStatus(row.deadline)}`} />
       <ListPanel title="Desejos" rows={wishes.filter((row) => row.owner_type === owner)} render={(row) => `${row.title} - ${money(row.estimated_value)} - ${priorityLabels[row.priority]}`} />
     </section>
   );
@@ -683,6 +683,24 @@ function formatDate(dateText) {
 
 function weekday(dateText) {
   return new Date(`${dateText}T00:00:00`).toLocaleDateString('pt-BR', { weekday: 'long' });
+}
+
+function dateStatus(dateText) {
+  if (!dateText) return 'sem data';
+  const dateOnly = String(dateText).slice(0, 10);
+  const target = new Date(`${dateOnly}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return 'data invalida';
+
+  const now = new Date();
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDate = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const diffDays = Math.round((targetDate - todayDate) / 86400000);
+
+  if (diffDays === 0) return 'hoje';
+  if (diffDays === 1) return 'amanha';
+  if (diffDays === -1) return 'atrasada ha 1 dia';
+  if (diffDays > 1) return `faltam ${diffDays} dias`;
+  return `atrasada ha ${Math.abs(diffDays)} dias`;
 }
 
 function roundMacro(value) {
