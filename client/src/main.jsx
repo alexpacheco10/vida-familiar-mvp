@@ -333,7 +333,10 @@ function Workouts({ token, owner }) {
     <section className="grid">
       <form className="panel form" onSubmit={submit}>
         <h2>Registrar treino do dia</h2>
-        <input value={form.workout_date} type="date" onChange={(event) => setForm({ ...form, workout_date: event.target.value })} />
+        <label className="inputField">
+          <span>Data do treino</span>
+          <input value={form.workout_date} type="date" onChange={(event) => setForm({ ...form, workout_date: event.target.value })} />
+        </label>
         <input value={form.exercise} onChange={(event) => setForm({ ...form, exercise: event.target.value })} placeholder="Exercicio feito" required />
         <div className="inlineFields">
           <input value={form.sets} type="number" min="1" onChange={(event) => setForm({ ...form, sets: event.target.value })} placeholder="Series" />
@@ -475,7 +478,10 @@ function Diet({ token, owner }) {
     <section className="grid">
       <form className="panel form" onSubmit={submit}>
         <h2>Adicionar refeicao</h2>
-        <input value={form.meal_date} type="date" onChange={(event) => setForm({ ...form, meal_date: event.target.value })} />
+        <label className="inputField">
+          <span>Data da refeicao</span>
+          <input value={form.meal_date} type="date" onChange={(event) => setForm({ ...form, meal_date: event.target.value })} />
+        </label>
         <input value={form.food_name} onChange={(event) => setForm({ ...form, food_name: event.target.value, source: 'typing' })} placeholder="Alimento" required />
         {loading && <p className="muted">Buscando informacoes nutricionais...</p>}
         {form.source === 'openfoodfacts' && <p className="muted">Valores preenchidos automaticamente pela Open Food Facts.</p>}
@@ -607,7 +613,15 @@ function Field({ field, form, setForm }) {
   if (field === 'type') return <select value={value} onChange={(e) => update(e.target.value)}><option value="expense">Despesa</option><option value="income">Receita</option></select>;
   if (field === 'recurrence') return <select value={value} onChange={(e) => update(e.target.value)}><option value="none">Sem recorrencia</option><option value="daily">Diaria</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option><option value="yearly">Anual</option></select>;
   if (field === 'body' || field === 'description') return <textarea value={value} onChange={(e) => update(e.target.value)} placeholder={label(field)} />;
-  const type = field.includes('date') || field === 'deadline' ? 'date' : field.includes('amount') || field.includes('value') ? 'number' : 'text';
+  if (field.includes('date') || field === 'deadline') {
+    return (
+      <label className="inputField">
+        <span>{label(field)}</span>
+        <input value={value} type="date" onChange={(e) => update(e.target.value)} />
+      </label>
+    );
+  }
+  const type = field.includes('amount') || field.includes('value') ? 'number' : 'text';
   return <input value={value} type={type} step="0.01" onChange={(e) => update(e.target.value)} placeholder={label(field)} required={field === 'title'} />;
 }
 

@@ -135,8 +135,15 @@ input, select, textarea {
   border: 1px solid #cbd8d2;
   border-radius: 8px;
   padding: 10px 12px;
+  min-height: 42px;
   background: #fbfcfb;
   color: #1c2423;
+}
+
+input[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1.2;
 }
 
 textarea {
@@ -240,10 +247,15 @@ button[type="submit"], form button, .actions button, .loginBox button {
   gap: 6px;
 }
 
-.macroField span {
+.macroField span, .inputField span {
   color: #43514f;
   font-size: 0.88rem;
   font-weight: 700;
+}
+
+.inputField {
+  display: grid;
+  gap: 6px;
 }
 
 .workoutDays {
