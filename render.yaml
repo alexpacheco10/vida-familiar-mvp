@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: vida-familiar-api
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        value: https://alexpacheco10.github.io
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vida-familiar-db
+          property: connectionString
+
+databases:
+  - name: vida-familiar-db
+    plan: free

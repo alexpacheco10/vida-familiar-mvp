@@ -1,6 +1,6 @@
 # Vida Familiar MVP
 
-Sistema web para administrar vida pessoal, vida da esposa e vida do casal. O MVP usa React no front-end, Node.js com Express no back-end e SQLite local.
+Sistema web para administrar vida pessoal, vida da esposa e vida do casal. O MVP usa React no front-end, Node.js com Express no back-end, SQLite localmente e PostgreSQL em producao quando `DATABASE_URL` estiver configurada.
 
 ## Funcionalidades
 
@@ -15,7 +15,7 @@ Sistema web para administrar vida pessoal, vida da esposa e vida do casal. O MVP
 - Metas financeiras, metas gerais, desejos de consumo e anotacoes.
 - Visibilidade por item: privado, compartilhado ou somente leitura.
 - Notificacoes simples para tarefas proximas do vencimento.
-- Backup manual do banco SQLite.
+- Backup manual do banco SQLite local e registro de backup no PostgreSQL em producao.
 
 ## Estrutura
 
@@ -37,7 +37,7 @@ Sistema web para administrar vida pessoal, vida da esposa e vida do casal. O MVP
 
 ## Banco de dados
 
-O banco fica em `server/data/vida-familiar.sqlite` e e criado automaticamente ao iniciar a API. As tabelas principais sao:
+Localmente, o banco fica em `server/data/vida-familiar.sqlite` e e criado automaticamente ao iniciar a API. Em producao, configure `DATABASE_URL` para usar PostgreSQL. As tabelas principais sao:
 
 - `users`
 - `profiles`
@@ -95,24 +95,31 @@ Acesse:
 - Front-end: `http://localhost:5173`
 - API: `http://localhost:4000`
 
-## Publicacao online
+## Publicacao online recomendada
 
-O GitHub Pages hospeda apenas o front-end React. Ele nao executa o back-end Node.js nem o banco SQLite. Por isso, no link do GitHub Pages o login so funcionara depois que a API estiver hospedada em outro servico.
+O GitHub Pages hospeda apenas o front-end React. Ele nao executa o back-end Node.js. A melhor opcao para este projeto e manter o front-end no GitHub Pages e hospedar a API no Render com PostgreSQL.
 
-Opcoes simples para hospedar a API:
+Este repositorio ja possui `render.yaml`, que cria:
 
-- Render
-- Railway
-- Fly.io
-- VPS propria
+- um servico web Node para a API
+- um banco PostgreSQL
+- as variaveis principais de ambiente
 
-Depois de hospedar a API, configure o front-end com a variavel:
+Passos:
+
+1. Acesse Render e crie um novo Blueprint apontando para este repositorio.
+2. Aguarde o Render criar o servico `vida-familiar-api` e o banco `vida-familiar-db`.
+3. Copie a URL publica da API, por exemplo `https://vida-familiar-api.onrender.com`.
+4. No GitHub, va em `Settings > Secrets and variables > Actions > Variables`.
+5. Crie a variavel `VITE_API_URL` com o valor:
 
 ```bash
-VITE_API_URL=https://sua-api-online.com/api
+https://vida-familiar-api.onrender.com/api
 ```
 
-Em seguida gere um novo build e publique novamente no GitHub Pages.
+6. Rode novamente o workflow `Deploy GitHub Pages` ou faca um novo push.
+
+Depois disso, o login do GitHub Pages passa a usar a API online.
 
 Contas iniciais:
 
@@ -149,7 +156,7 @@ Contas iniciais:
 - Adicionar anexos, etiquetas e busca global.
 - Criar importacao/exportacao em CSV ou Excel.
 - Adicionar testes automatizados da API e componentes.
-- Trocar SQLite por PostgreSQL quando houver uso multiusuario intenso.
+- Melhorar rotinas de backup automatico do PostgreSQL no provedor de hospedagem.
 
 ## Evolucao para mobile
 

@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { db, getDbPath } from './db.js';
+import { all, get, getDbPath, isPostgres, run } from './db.js';
 import { requireAuth, signToken } from './auth.js';
 import { create, getById, list, remove, update, upsertRecurringTask } from './repositories.js';
 
@@ -10,9 +10,11 @@ export const router = express.Router();
 
 const resources = ['tasks', 'finances', 'financial_goals', 'goals', 'wishlists', 'notes', 'events', 'workouts', 'diet_entries'];
 
-router.post('/auth/login', (req, res) => {
+const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+
+router.post('/auth/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const user = await get('SELECT * FROM users WHERE email = ?', [email]);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'E-mail ou senha invalidos.' });
   }
@@ -20,70 +22,70 @@ router.post('/auth/login', (req, res) => {
     token: signToken(user),
     user: { id: user.id, name: user.name, email: user.email, role: user.role }
   });
-});
+}));
 
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
 
 for (const resource of resources) {
-  router.get(`/${resource}`, requireAuth, (req, res) => {
-    res.json(list(resource, req.query, req.user));
-  });
+  router.get(`/${resource}`, requireAuth, asyncHandler(async (req, res) => {
+    res.json(await list(resource, req.query, req.user));
+  }));
 
-  router.get(`/${resource}/:id`, requireAuth, (req, res) => {
-    const row = getById(resource, req.params.id, req.user);
+  router.get(`/${resource}/:id`, requireAuth, asyncHandler(async (req, res) => {
+    const row = await getById(resource, req.params.id, req.user);
     if (!row) return res.status(404).json({ error: 'Registro nao encontrado.' });
     res.json(row);
-  });
+  }));
 
-  router.post(`/${resource}`, requireAuth, (req, res) => {
-    const row = create(resource, req.body, req.user);
-    if (resource === 'tasks') upsertRecurringTask(row);
+  router.post(`/${resource}`, requireAuth, asyncHandler(async (req, res) => {
+    const row = await create(resource, req.body, req.user);
+    if (resource === 'tasks') await upsertRecurringTask(row);
     res.status(201).json(row);
-  });
+  }));
 
-  router.put(`/${resource}/:id`, requireAuth, (req, res) => {
+  router.put(`/${resource}/:id`, requireAuth, asyncHandler(async (req, res) => {
     try {
-      const row = update(resource, req.params.id, req.body, req.user);
+      const row = await update(resource, req.params.id, req.body, req.user);
       if (!row) return res.status(404).json({ error: 'Registro nao encontrado.' });
-      if (resource === 'tasks') upsertRecurringTask(row);
+      if (resource === 'tasks') await upsertRecurringTask(row);
       res.json(row);
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message });
     }
-  });
+  }));
 
-  router.delete(`/${resource}/:id`, requireAuth, (req, res) => {
-    if (!remove(resource, req.params.id, req.user)) return res.status(404).json({ error: 'Registro nao encontrado.' });
+  router.delete(`/${resource}/:id`, requireAuth, asyncHandler(async (req, res) => {
+    if (!await remove(resource, req.params.id, req.user)) return res.status(404).json({ error: 'Registro nao encontrado.' });
     res.status(204).end();
-  });
+  }));
 }
 
-router.patch('/tasks/:id/toggle', requireAuth, (req, res) => {
-  const task = getById('tasks', req.params.id, req.user);
+router.patch('/tasks/:id/toggle', requireAuth, asyncHandler(async (req, res) => {
+  const task = await getById('tasks', req.params.id, req.user);
   if (!task) return res.status(404).json({ error: 'Tarefa nao encontrada.' });
   const status = task.status === 'completed' ? 'pending' : 'completed';
-  const row = update('tasks', req.params.id, {
+  const row = await update('tasks', req.params.id, {
     status,
     completed_at: status === 'completed' ? new Date().toISOString() : null
   }, req.user);
   res.json(row);
-});
+}));
 
-router.post('/recurring_tasks/run', requireAuth, (req, res) => {
+router.post('/recurring_tasks/run', requireAuth, asyncHandler(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
-  const rows = db.prepare(`
+  const rows = await all(`
     SELECT recurring_tasks.*, tasks.title, tasks.description, tasks.owner_type, tasks.visibility,
            tasks.category, tasks.priority, tasks.created_by
     FROM recurring_tasks
     JOIN tasks ON tasks.id = recurring_tasks.task_id
     WHERE recurring_tasks.next_run_date <= ?
-  `).all(today);
+  `, [today]);
 
   const created = [];
   for (const row of rows) {
-    const task = create('tasks', {
+    const task = await create('tasks', {
       title: row.title,
       description: row.description,
       owner_type: row.owner_type,
@@ -97,11 +99,11 @@ router.post('/recurring_tasks/run', requireAuth, (req, res) => {
     created.push(task);
 
     const next = nextDate(row.next_run_date, row.frequency);
-    db.prepare('UPDATE recurring_tasks SET next_run_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(next, row.id);
+    await run('UPDATE recurring_tasks SET next_run_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [next, row.id]);
   }
 
   res.json({ created });
-});
+}));
 
 router.get('/foods/search', requireAuth, async (req, res) => {
   const query = String(req.query.q || '').trim();
@@ -146,10 +148,10 @@ router.get('/foods/search', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/dashboard/summary', requireAuth, (req, res) => {
-  const tasks = list('tasks', {}, req.user);
-  const finances = list('finances', {}, req.user);
-  const events = list('events', {}, req.user);
+router.get('/dashboard/summary', requireAuth, asyncHandler(async (req, res) => {
+  const tasks = await list('tasks', {}, req.user);
+  const finances = await list('finances', {}, req.user);
+  const events = await list('events', {}, req.user);
   const today = new Date();
   const isoToday = today.toISOString().slice(0, 10);
   const weekEnd = new Date(today);
@@ -176,55 +178,59 @@ router.get('/dashboard/summary', requireAuth, (req, res) => {
     },
     finances: { balance, expensesByCategory }
   });
-});
+}));
 
-router.post('/notifications/generate', requireAuth, (req, res) => {
+router.post('/notifications/generate', requireAuth, asyncHandler(async (req, res) => {
   const days = Number(req.body.days || 3);
   const limit = new Date();
   limit.setDate(limit.getDate() + days);
-  const tasks = list('tasks', {}, req.user).filter((task) => {
+  const tasks = (await list('tasks', {}, req.user)).filter((task) => {
     return task.status !== 'completed' && task.due_date && task.due_date <= limit.toISOString().slice(0, 10);
   });
 
-  const insert = db.prepare(`
-    INSERT INTO notifications (item_type, item_id, title, message, owner_type, visibility, notify_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
   for (const task of tasks) {
-    const exists = db.prepare('SELECT id FROM notifications WHERE item_type = ? AND item_id = ? AND read_at IS NULL')
-      .get('task', task.id);
+    const exists = await get('SELECT id FROM notifications WHERE item_type = ? AND item_id = ? AND read_at IS NULL', ['task', task.id]);
     if (!exists) {
-      insert.run('task', task.id, `Tarefa proxima: ${task.title}`, `Vence em ${task.due_date}`, task.owner_type, task.visibility, task.due_date);
+      await run(`
+        INSERT INTO notifications (item_type, item_id, title, message, owner_type, visibility, notify_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, ['task', task.id, `Tarefa proxima: ${task.title}`, `Vence em ${task.due_date}`, task.owner_type, task.visibility, task.due_date]);
     }
   }
-  res.json(listNotifications(req.user));
-});
+  res.json(await listNotifications(req.user));
+}));
 
-router.get('/notifications', requireAuth, (req, res) => {
-  res.json(listNotifications(req.user));
-});
+router.get('/notifications', requireAuth, asyncHandler(async (req, res) => {
+  res.json(await listNotifications(req.user));
+}));
 
-router.patch('/notifications/:id/read', requireAuth, (req, res) => {
-  db.prepare('UPDATE notifications SET read_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+router.patch('/notifications/:id/read', requireAuth, asyncHandler(async (req, res) => {
+  await run('UPDATE notifications SET read_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
-router.post('/backups', requireAuth, (req, res) => {
+router.post('/backups', requireAuth, asyncHandler(async (req, res) => {
+  if (isPostgres) {
+    const filename = `postgres-backup-${new Date().toISOString()}`;
+    await run('INSERT INTO backups (filename, created_by) VALUES (?, ?)', [filename, req.user.id]);
+    return res.json({ filename, note: 'Em producao com PostgreSQL, use backups do provedor do banco.' });
+  }
+
   const backupDir = path.join(path.dirname(getDbPath()), 'backups');
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
   const filename = `backup-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
   const target = path.join(backupDir, filename);
   fs.copyFileSync(getDbPath(), target);
-  db.prepare('INSERT INTO backups (filename, created_by) VALUES (?, ?)').run(target, req.user.id);
+  await run('INSERT INTO backups (filename, created_by) VALUES (?, ?)', [target, req.user.id]);
   res.json({ filename: target });
-});
+}));
 
-router.get('/backups', requireAuth, (req, res) => {
-  res.json(db.prepare('SELECT * FROM backups ORDER BY created_at DESC').all());
-});
+router.get('/backups', requireAuth, asyncHandler(async (req, res) => {
+  res.json(await all('SELECT * FROM backups ORDER BY created_at DESC'));
+}));
 
-function listNotifications(user) {
-  return db.prepare('SELECT * FROM notifications ORDER BY notify_at ASC').all().filter((row) => {
+async function listNotifications(user) {
+  return (await all('SELECT * FROM notifications ORDER BY notify_at ASC')).filter((row) => {
     if (row.visibility !== 'private') return true;
     if (user.role === 'admin') return true;
     return row.owner_type !== 'me';

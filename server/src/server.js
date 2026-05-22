@@ -4,7 +4,7 @@ import express from 'express';
 import { initDb } from './db.js';
 import { router } from './routes.js';
 
-initDb();
+await initDb();
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -15,6 +15,11 @@ app.use('/api', router);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  res.status(500).json({ error: 'Erro interno da API.' });
 });
 
 app.listen(port, () => {
