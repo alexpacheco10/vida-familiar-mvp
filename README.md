@@ -95,6 +95,25 @@ Acesse:
 - Front-end: `http://localhost:5173`
 - API: `http://localhost:4000`
 
+## Publicacao online
+
+O GitHub Pages hospeda apenas o front-end React. Ele nao executa o back-end Node.js nem o banco SQLite. Por isso, no link do GitHub Pages o login so funcionara depois que a API estiver hospedada em outro servico.
+
+Opcoes simples para hospedar a API:
+
+- Render
+- Railway
+- Fly.io
+- VPS propria
+
+Depois de hospedar a API, configure o front-end com a variavel:
+
+```bash
+VITE_API_URL=https://sua-api-online.com/api
+```
+
+Em seguida gere um novo build e publique novamente no GitHub Pages.
+
 Contas iniciais:
 
 - `eu@example.com` / `123456`

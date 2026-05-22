@@ -22,6 +22,11 @@ function api(token, path, options = {}) {
     if (!response.ok) throw new Error((await response.json()).error || 'Erro na API');
     if (response.status === 204) return null;
     return response.json();
+  }).catch((error) => {
+    if (error instanceof TypeError) {
+      throw new Error('API offline. O GitHub Pages hospeda apenas o frontend; para logar online e preciso hospedar o backend Node/Express.');
+    }
+    throw error;
   });
 }
 
